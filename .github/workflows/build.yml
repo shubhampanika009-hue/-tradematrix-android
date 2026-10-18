@@ -1,0 +1,115 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Allocate Massive Swap Space (16GB Enterprise RAM Boost)
+      run: |
+        sudo swapoff -a || true
+        sudo rm -f /swapfile
+        sudo dd if=/dev/zero of=/swapfile bs=1M count=16384
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        free -h
+
+    - name: Install Advanced System Dependencies
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          git \
+          curl \
+          wget \
+          zip \
+          unzip \
+          autoconf \
+          libtool \
+          pkg-config \
+          zlib1g-dev \
+          libncurses5-dev \
+          libreadline-dev \
+          libffi-dev \
+          libssl-dev \
+          libsqlite3-dev \
+          sqlite3 \
+          bzip2 \
+          libbz2-dev \
+          liblzma-dev \
+          tk-dev \
+          libltdl-dev \
+          cmake \
+          ccache \
+          libc6:i386 \
+          libstdc++6:i386 \
+          zlib1g:i386
+
+    - name: Install Advanced Python Build Tools
+      run: |
+        python -m pip install --upgrade pip setuptools wheel
+        pip install --upgrade buildozer cython requests colorama urllib3 certifi
+
+    - name: Create Advanced buildozer.spec Safely
+      run: |
+        printf '%s\n' \
+        "[app]" \
+        "title = Cyberpunk AI" \
+        "package.name = cyberpunkai" \
+        "package.domain = org.cyberpunk" \
+        "source.dir = ." \
+        "source.include_exts = py,png,jpg,kv,atlas,txt,json" \
+        "version = 0.2" \
+        "requirements = python3,kivy,requests,colorama,urllib3,certifi,chardet,idna" \
+        "orientation = portrait" \
+        "fullscreen = 0" \
+        "android.permissions = INTERNET,ACCESS_NETWORK_STATE,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE" \
+        "android.api = 34" \
+        "android.minapi = 21" \
+        "android.ndk = 25b" \
+        "android.accept_sdk_license = True" \
+        "android.archs = arm64-v8a" \
+        "p4a.branch = master" \
+        "" \
+        "[buildozer]" \
+        "log_level = 2" \
+        "warn_on_root = 1" > buildozer.spec
+
+    - name: Build APK with Buildozer
+      env:
+        BUILDOZER_ALLOW_ROOT: "1"
+        ACCEPT_BUILD_TOOLS_CHECKSUMS: "true"
+        USE_CCACHE: "1"
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      run: |
+        export GOOGLE_API_KEY="${GOOGLE_API_KEY}"
+        export MAKEOPTS="-j2"
+        buildozer -v android debug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Cyberpunk-AI-Advanced-App
+        path: bin/*.apk
